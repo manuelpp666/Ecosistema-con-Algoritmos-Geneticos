@@ -1,70 +1,71 @@
 # ============================================
-# visualizacion.py
-# Visualización 2D con matplotlib y sprites
+# simulacion/visualizacion.py
 # ============================================
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-from matplotlib.patches import Rectangle
+import pygame
 from configuracion import parametros
 
+# Configuración Visual
+CELDA = 15  # Tamaño en pixeles de cada celda
+COLOR_TIERRA = (100, 70, 40)
+COLOR_HIERBA = (34, 139, 34)
 
 class Visualizacion:
     def __init__(self, mundo):
         self.mundo = mundo
-        self.filas, self.columnas = parametros.TAMANO_MUNDO
-
-        # intenta cargar sprites (si no están, matplotlib fallará)
+        pygame.init()
+        
+        cols, filas = parametros.TAMANO_MUNDO[1], parametros.TAMANO_MUNDO[0]
+        self.screen = pygame.display.set_mode((cols * CELDA, filas * CELDA))
+        pygame.display.set_caption("Ecosistema Genético")
+        
+        # Cargar imágenes si existen
+        self.usar_sprites = False
         try:
-            self.img_conejo = mpimg.imread("assets/conejo.png")
-            self.img_lobo = mpimg.imread("assets/lobo.png")
-        except Exception:
-            self.img_conejo = None
-            self.img_lobo = None
+            self.img_conejo = pygame.transform.scale(pygame.image.load("assets/conejo.png"), (CELDA, CELDA))
+            self.img_lobo = pygame.transform.scale(pygame.image.load("assets/lobo.png"), (CELDA, CELDA))
+            self.usar_sprites = True
+        except:
+            print("Sprites no encontrados, usando circulos.")
 
-        self.fig, self.ax = plt.subplots(figsize=(6, 6))
-        self.ax.set_xlim(0, self.columnas)
-        self.ax.set_ylim(0, self.filas)
-        self.ax.set_aspect("equal")
-        self.ax.set_title("Ecosistema - Genoma completo")
+        self.reloj = pygame.time.Clock()
+        self.font = pygame.font.SysFont("Arial", 14)
 
     def dibujar(self):
-        self.ax.clear()
-        self.ax.set_xlim(0, self.columnas)
-        self.ax.set_ylim(0, self.filas)
-        self.ax.set_xticks([])
-        self.ax.set_yticks([])
-        self.ax.set_aspect("equal")
+        # Manejar cierre de ventana
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return False
 
-        # dibujar presas
-        for presa in self.mundo.presas:
-            f, c = presa.posicion
-            # extent = (x0, x1, y0, y1) con x=columnas (c), y=filas (f)
-            if self.img_conejo is not None:
-                self.ax.imshow(self.img_conejo, extent=(c, c + 1, f, f + 1), zorder=2)
+        self.screen.fill(COLOR_TIERRA)
+
+        # Dibujar Hierba
+        filas, cols = self.mundo.tamano
+        for f in range(filas):
+            for c in range(cols):
+                nivel = self.mundo.hierba[f][c]
+                if nivel > 0.1:
+                    # Interpolación de color
+                    color = [int(COLOR_TIERRA[i] + (COLOR_HIERBA[i]-COLOR_TIERRA[i])*nivel) for i in range(3)]
+                    pygame.draw.rect(self.screen, color, (c*CELDA, f*CELDA, CELDA, CELDA))
+
+        # Dibujar Entidades
+        for entidad in self.mundo.todas_las_entidades():
+            if not entidad.viva: continue
+            x, y = entidad.posicion[1] * CELDA, entidad.posicion[0] * CELDA
+            
+            if self.usar_sprites:
+                img = self.img_conejo if entidad.tipo == "presa" else self.img_lobo
+                self.screen.blit(img, (x, y))
             else:
-                self.ax.scatter(c + 0.5, f + 0.5, s=80, marker='o', color='green', zorder=2)
+                color = (200, 200, 200) if entidad.tipo == "presa" else (200, 50, 50)
+                pygame.draw.circle(self.screen, color, (x+CELDA//2, y+CELDA//2), CELDA//2 - 1)
 
-            # barra de energia (normalizada)
-            nivel = presa.energia / max(1.0, presa.energia_maxima)
-            nivel = max(0.0, min(1.0, nivel))
-            ancho = 0.8 * nivel
-            fondo = Rectangle((c + 0.1, f + 0.95), 0.8, 0.08, color=(0.4, 0.4, 0.4), zorder=3)
-            barra = Rectangle((c + 0.1, f + 0.95), ancho, 0.08, color=(0, 1, 0), zorder=4)
-            self.ax.add_patch(fondo); self.ax.add_patch(barra)
+        # Estadísticas
+        info = f"Presas: {len(self.mundo.presas)} | Depredadores: {len(self.mundo.depredadores)}"
+        text = self.font.render(info, True, (255, 255, 255))
+        pygame.draw.rect(self.screen, (0,0,0), (0,0, self.screen.get_width(), 20))
+        self.screen.blit(text, (5, 2))
 
-        # dibujar depredadores
-        for d in self.mundo.depredadores:
-            f, c = d.posicion
-            if self.img_lobo is not None:
-                self.ax.imshow(self.img_lobo, extent=(c, c + 1, f, f + 1), zorder=2)
-            else:
-                self.ax.scatter(c + 0.5, f + 0.5, s=100, marker='s', color='red', zorder=2)
-
-            nivel = d.energia / max(1.0, d.energia_maxima)
-            nivel = max(0.0, min(1.0, nivel))
-            ancho = 0.8 * nivel
-            fondo = Rectangle((c + 0.1, f + 0.95), 0.8, 0.08, color=(0.4, 0.4, 0.4), zorder=3)
-            barra = Rectangle((c + 0.1, f + 0.95), ancho, 0.08, color=(1, 0, 0), zorder=4)
-            self.ax.add_patch(fondo); self.ax.add_patch(barra)
-
-        plt.pause(1.0 / parametros.FPS)
+        pygame.display.flip()
+        self.reloj.tick(30) # 30 FPS objetivo
+        return True

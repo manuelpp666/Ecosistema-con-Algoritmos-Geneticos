@@ -1,13 +1,10 @@
 # ============================================
 # main.py
-# Ejecutar la simulación
 # ============================================
-
 from simulacion.motor import MotorSimulacion
 from simulacion.visualizacion import Visualizacion
 from nucleo.mundo import Mundo
 from configuracion import parametros
-import matplotlib.pyplot as plt
 
 def main():
     mundo = Mundo()
@@ -15,19 +12,23 @@ def main():
     vis = Visualizacion(mundo)
 
     pasos_totales = parametros.PASOS_POR_GENERACION * parametros.GENERACIONES
+    corriendo = True
+    paso = 0
 
-    plt.ion()
-    for paso in range(1, pasos_totales + 1):
+    print("Iniciando simulación. Cierra la ventana gráfica para detener.")
+
+    while corriendo and paso < pasos_totales:
+        paso += 1
         motor.ejecutar_paso()
-        vis.dibujar()
+        
+        # Dibujar retorna False si el usuario cierra la ventana
+        corriendo = vis.dibujar()
 
-        # si la población se extingue, terminar
-        if len(mundo.presas) == 0 or len(mundo.depredadores) == 0:
-            print("Población extinguida. Fin de la simulación en paso", paso)
+        if len(mundo.presas) == 0 and len(mundo.depredadores) == 0:
+            print("Extinción total.")
             break
 
-    plt.ioff()
-    plt.show()
+    print("Fin de la simulación.")
 
 if __name__ == "__main__":
     main()
