@@ -11,24 +11,25 @@ def main():
     motor = MotorSimulacion(mundo)
     vis = Visualizacion(mundo)
 
-    pasos_totales = parametros.PASOS_POR_GENERACION * parametros.GENERACIONES
-    corriendo = True
     paso = 0
+    corriendo = True
 
-    print("Iniciando simulación. Cierra la ventana gráfica para detener.")
+    print("=== ECOSYSTEM COMPLEX ===")
+    print("Controles: [ESPACIO] Pausa, [FLECHAS] Velocidad")
 
-    while corriendo and paso < pasos_totales:
-        paso += 1
-        motor.ejecutar_paso()
+    while corriendo:
+        corriendo = vis.manejar_eventos()
         
-        # Dibujar retorna False si el usuario cierra la ventana
-        corriendo = vis.dibujar()
+        if not vis.pausado:
+            motor.ejecutar_paso()
+            paso += 1
+            
+            # Chequeo de seguridad anti-crash
+            if len(mundo.presas) == 0 and len(mundo.depredadores) == 0:
+                print("Mundo vacío.")
+                vis.pausado = True
 
-        if len(mundo.presas) == 0 and len(mundo.depredadores) == 0:
-            print("Extinción total.")
-            break
-
-    print("Fin de la simulación.")
+        vis.dibujar(paso)
 
 if __name__ == "__main__":
     main()
