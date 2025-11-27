@@ -17,56 +17,55 @@ class Depredador(Entidad):
         if not self.viva: return None
 
         # --- PERCEPCIÓN ---
-        bioma_actual = mundo.biomas[self.posicion[0]][self.posicion[1]]
-        vision_real = self.percepcion
-        
-        # Ajuste de biomas
-        if bioma_actual == parametros.BIOMA_BOSQUE: vision_real *= 0.7 
-        elif bioma_actual == parametros.BIOMA_LLANURA: vision_real *= 1.3
+        bioma = mundo.biomas[self.posicion[0]][self.posicion[1]]
+        vision = self.percepcion
+        if bioma == parametros.BIOMA_BOSQUE: vision *= 0.7 
+        elif bioma == parametros.BIOMA_LLANURA: vision *= 1.3
 
-        # Clasificar entorno
-        presas_visibles = []
-        parejas_visibles = []
-        
+        presas = []
+        parejas = []
         for e in cercanos:
-            dist = self.distancia(e.posicion)
-            if dist <= vision_real:
-                if e.tipo == "presa": presas_visibles.append(e)
-                elif e.tipo == "depredador" and e != self: parejas_visibles.append(e)
+            if self.distancia(e.posicion) <= vision:
+                if e.tipo == "presa": presas.append(e)
+                elif e.tipo == "depredador" and e != self: parejas.append(e)
 
-        # --- TOMA DE DECISIONES ---
+        # --- LÓGICA DE ESTABILIDAD ---
+        # Solo se reproducen si están REBOSANTES de energía (75%)
+        # Esto frena la explosión demográfica de lobos.
+        listo_reproducir = self.energia > (self.energia_maxima * 0.75)
+        hambre = self.energia < (self.energia_maxima * 0.4)
+
+        objetivo = None
+
+        # 1. Prioridad: Comer si tengo hambre
+        if hambre and presas:
+            objetivo = min(presas, key=lambda x: self.distancia(x.posicion))
         
-        # CAMBIO CLAVE: Umbral de reproducción mucho más alto (85%)
-        # Esto evita que la población de lobos explote y mate a todos los conejos.
-        modo_reproduccion = self.energia > (self.energia_maxima * 0.85)
-
-        # 1. REPRODUCCIÓN (Solo si está muy fuerte)
-        if modo_reproduccion and parejas_visibles:
-            pareja = min(parejas_visibles, key=lambda x: self.distancia(x.posicion))
-            
+        # 2. Prioridad: Reproducirse si estoy muy sano
+        elif listo_reproducir and parejas:
+            pareja = min(parejas, key=lambda x: self.distancia(x.posicion))
             if pareja.posicion == self.posicion:
-                # 50% chance de éxito
-                if random.random() < 0.5:
+                if random.random() < 0.4: # Probabilidad moderada
                     gen_hijo, e_hijo = self.reproducir_sexual_base(pareja)
                     return Depredador(self.posicion, gen_hijo, e_hijo)
             else:
-                self.perseguir(mundo, pareja)
-                return None
+                objetivo = pareja
 
-        # 2. CAZA (Prioridad estándar)
-        if presas_visibles:
-            presa_mas_cercana = min(presas_visibles, key=lambda x: self.distancia(x.posicion))
-            self.perseguir(mundo, presa_mas_cercana)
-            return None
+        # 3. Caza oportunista (si no hay nada más que hacer)
+        elif presas:
+            objetivo = min(presas, key=lambda x: self.distancia(x.posicion))
 
-        # 3. EXPLORACIÓN
-        self.mover(mundo)
+        # Movimiento
+        if objetivo:
+            self.perseguir(mundo, objetivo)
+        else:
+            self.mover(mundo)
+        
         return None
 
     def perseguir(self, mundo, objetivo):
         py, px = objetivo.posicion
         my, mx = self.posicion
-        
         vec_y, vec_x = py - my, px - mx
         dist = math.sqrt(vec_y**2 + vec_x**2)
         if dist == 0: return 
@@ -74,25 +73,22 @@ class Depredador(Entidad):
         pasos = max(1, int(self.velocidad))
         dest_y = int(my + (vec_y/dist) * pasos)
         dest_x = int(mx + (vec_x/dist) * pasos)
-        
         self.mover(mundo, (dest_y, dest_x))
 
-    def intentar_comer(self, lista_presas_aqui):
-        if not lista_presas_aqui: return False
+    def intentar_comer(self, presas_aqui):
+        if not presas_aqui: return False
         
-        presa = random.choice(lista_presas_aqui)
+        # Elige la presa más fácil
+        presa = min(presas_aqui, key=lambda p: p.velocidad)
         
-        # CÁLCULO DE ÉXITO DE CAZA
         chance = 0.6 + (self.genoma.get("agresividad", 0.5) * 0.3)
-        if presa.velocidad > self.velocidad: 
-            chance -= 0.15 
-        
+        if presa.velocidad > self.velocidad: chance -= 0.15
+            
         if random.random() < chance:
             presa.viva = False
             self.ganar_energia(parametros.ENERGIA_AL_COMER_PRESA)
             self.presas_comidas += 1
             return True
-            
         return False
 
     def distancia(self, pos):
